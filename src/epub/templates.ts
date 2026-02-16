@@ -54,7 +54,6 @@ a {
 export function sanitizeArticleHtml(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat([
-      'img',
       'h1',
       'h2',
       'h3',
@@ -65,7 +64,6 @@ export function sanitizeArticleHtml(html: string): string {
     ]),
     allowedAttributes: {
       ...sanitizeHtml.defaults.allowedAttributes,
-      img: ['src', 'alt', 'title'],
       a: ['href', 'title'],
     },
     allowedSchemes: ['http', 'https'],

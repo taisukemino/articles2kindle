@@ -69,6 +69,17 @@
 - Follow consistent file structure with sources, cli, db, epub, email folders
 - Maintain consistent architecture patterns across the codebase
 
+# Known Issues
+
+## Images stripped from EPUBs
+
+Images (`<img>` tags) are intentionally stripped during HTML sanitization in `src/epub/templates.ts`. The `epub-gen-memory` library attempts to download every external image referenced in article HTML. Its `fetchTimeout` and `retryTimes` options do not reliably prevent hanging — Node.js fetch operations block the event loop indefinitely for image-heavy publications (e.g., Julia Evans: 73 articles, 284 images). This caused the entire bundling process to stall with no error output.
+
+Stripping images at the sanitization layer is the current workaround. To restore images in the future, consider:
+- Pre-downloading images with proper AbortController timeouts before passing HTML to epub-gen-memory
+- Replacing external image URLs with data URIs during a preprocessing step
+- Switching to an EPUB library with more reliable timeout behavior
+
 # Tech Stack
 
 - Runtime: Node.js + TypeScript
