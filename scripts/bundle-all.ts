@@ -1,7 +1,7 @@
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { listAuthors } from '../src/db/queries/authors.js';
-import { getUnbundledByAuthor, markArticlesBundled } from '../src/db/queries/articles.js';
+import { listPublications } from '../src/db/queries/publications.js';
+import { getUnbundledByPublication, markArticlesBundled } from '../src/db/queries/articles.js';
 import { createBundle } from '../src/db/queries/bundles.js';
 import { buildEpub, type EpubArticle } from '../src/epub/builder.js';
 import { getBundleDir } from '../src/config/paths.js';
@@ -31,9 +31,18 @@ function toEpubArticle(article: ArticleRow): EpubArticle {
 
 function sanitizeFileName(name: string): string {
   return name
-    .replace(/[^a-zA-Z0-9\-_ ()]/g, '')
+    .replace(/[^\p{L}\p{N}\-_ ()]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function summarizeAuthorNames(articles: ArticleRow[]): string {
+  const uniqueAuthors = [
+    ...new Set(articles.map((article) => article.author).filter(Boolean)),
+  ] as string[];
+  if (uniqueAuthors.length === 0) return 'Various Authors';
+  if (uniqueAuthors.length <= 2) return uniqueAuthors.join(', ');
+  return `${uniqueAuthors.slice(0, 2).join(', ')} and ${uniqueAuthors.length - 2} others`;
 }
 
 function saveBundleToDisk(
@@ -58,22 +67,13 @@ function saveBundleToDisk(
   return { bundleId, filePath, fileSize };
 }
 
-function extractPublicationName(articles: ArticleRow[]): string | null {
-  const uniqueNames = [
-    ...new Set(articles.map((article) => article.publicationName).filter(Boolean)),
-  ];
-  return uniqueNames.length === 1 ? uniqueNames[0]! : null;
-}
-
-async function bundleAuthor(authorName: string, authorNormalized: string): Promise<void> {
-  const articles = getUnbundledByAuthor(authorNormalized) as ArticleRow[];
+async function bundlePublication(publicationName: string): Promise<void> {
+  const articles = getUnbundledByPublication(publicationName) as ArticleRow[];
   if (articles.length === 0) return;
 
-  const publicationName = extractPublicationName(articles);
+  const authorSummary = summarizeAuthorNames(articles);
   const dateLabel = new Date().toISOString().slice(0, 10);
-  const baseTitle = publicationName
-    ? `${publicationName} - ${authorName} - Created ${dateLabel}`
-    : `${authorName} - Created ${dateLabel}`;
+  const baseTitle = `${publicationName} - ${authorSummary} - Created ${dateLabel}`;
 
   // Try building as a single EPUB first
   const epubBuffer = await buildEpub(baseTitle, articles.map(toEpubArticle));
@@ -128,20 +128,22 @@ async function bundleAuthor(authorName: string, authorNormalized: string): Promi
 }
 
 async function main() {
-  const authors = listAuthors();
-  const unbundled = authors
-    .filter((author) => author.unbundledCount > 0)
+  const publications = listPublications();
+  const unbundled = publications
+    .filter((pub) => pub.unbundledCount > 0)
     .sort((first, second) => second.unbundledCount - first.unbundledCount);
 
-  console.log(`Bundling ${unbundled.length} authors...\n`);
+  console.log(`Bundling ${unbundled.length} publications...\n`);
 
   let completed = 0;
   let failed = 0;
 
-  for (const author of unbundled) {
-    console.log(`[${completed + 1}/${unbundled.length}] ${author.author} (${author.unbundledCount} articles)`);
+  for (const publication of unbundled) {
+    console.log(
+      `[${completed + 1}/${unbundled.length}] ${publication.publicationName} (${publication.unbundledCount} articles)`,
+    );
     try {
-      await bundleAuthor(author.author, author.authorNormalized);
+      await bundlePublication(publication.publicationName);
       completed++;
     } catch (error) {
       console.error(`  FAILED: ${error instanceof Error ? error.message : String(error)}`);
@@ -149,7 +151,7 @@ async function main() {
     }
   }
 
-  console.log(`\nDone! ${completed} authors bundled, ${failed} failed.`);
+  console.log(`\nDone! ${completed} publications bundled, ${failed} failed.`);
 }
 
 main();

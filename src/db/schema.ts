@@ -23,6 +23,7 @@ export const articles = sqliteTable(
   (table) => [
     uniqueIndex('source_unique_idx').on(table.sourceName, table.sourceId),
     index('author_normalized_idx').on(table.authorNormalized),
+    index('publication_name_idx').on(table.publicationName),
   ],
 );
 

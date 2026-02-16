@@ -1,12 +1,12 @@
 import { Command } from 'commander';
 import { listArticles } from '../../db/queries/articles.js';
-import { listAuthors } from '../../db/queries/authors.js';
+import { listPublications } from '../../db/queries/publications.js';
 import { listBundles } from '../../db/queries/bundles.js';
 import { printTable, printInfo, truncate, formatDate, formatFileSize } from '../output.js';
 
 export function createListCommand(): Command {
   const listCmd = new Command('list')
-    .description('List articles, authors, or bundles')
+    .description('List articles, publications, or bundles')
     .option('--author <name>', 'Filter by author name')
     .option('--all', 'Include bundled articles')
     .option('--limit <n>', 'Limit number of results', '50')
@@ -37,22 +37,22 @@ export function createListCommand(): Command {
     });
 
   listCmd
-    .command('authors')
-    .description('List all authors with article counts')
+    .command('publications')
+    .description('List all publications with article counts')
     .action(() => {
-      const authors = listAuthors();
+      const publications = listPublications();
 
-      if (authors.length === 0) {
-        printInfo('No authors found. Run "articles2kindle fetch" to fetch articles.');
+      if (publications.length === 0) {
+        printInfo('No publications found. Run "articles2kindle fetch" to fetch articles.');
         return;
       }
 
       printTable(
-        ['Author', 'Total Articles', 'Unbundled'],
-        authors.map((authorRow) => [
-          authorRow.author,
-          String(authorRow.articleCount),
-          String(authorRow.unbundledCount),
+        ['Publication', 'Total Articles', 'Unbundled'],
+        publications.map((row) => [
+          row.publicationName,
+          String(row.articleCount),
+          String(row.unbundledCount),
         ]),
       );
     });

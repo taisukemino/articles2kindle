@@ -84,12 +84,12 @@ export function getArticlesByIds(ids: number[]) {
     .filter(Boolean);
 }
 
-export function getUnbundledByAuthor(authorNormalized: string) {
+export function getUnbundledByPublication(publicationName: string) {
   const database = getDatabase();
   return database
     .select()
     .from(articles)
-    .where(and(eq(articles.authorNormalized, authorNormalized), eq(articles.bundled, false)))
+    .where(and(eq(articles.publicationName, publicationName), eq(articles.bundled, false)))
     .orderBy(desc(articles.publishedAt))
     .all();
 }
