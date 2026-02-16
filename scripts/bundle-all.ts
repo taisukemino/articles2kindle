@@ -58,11 +58,22 @@ function saveBundleToDisk(
   return { bundleId, filePath, fileSize };
 }
 
+function extractPublicationName(articles: ArticleRow[]): string | null {
+  const uniqueNames = [
+    ...new Set(articles.map((article) => article.publicationName).filter(Boolean)),
+  ];
+  return uniqueNames.length === 1 ? uniqueNames[0]! : null;
+}
+
 async function bundleAuthor(authorName: string, authorNormalized: string): Promise<void> {
   const articles = getUnbundledByAuthor(authorNormalized) as ArticleRow[];
   if (articles.length === 0) return;
 
-  const baseTitle = `${authorName} - Articles`;
+  const publicationName = extractPublicationName(articles);
+  const dateLabel = new Date().toISOString().slice(0, 10);
+  const baseTitle = publicationName
+    ? `${publicationName} - ${authorName} - Created ${dateLabel}`
+    : `${authorName} - Created ${dateLabel}`;
 
   // Try building as a single EPUB first
   const epubBuffer = await buildEpub(baseTitle, articles.map(toEpubArticle));
