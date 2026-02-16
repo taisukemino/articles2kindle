@@ -2,11 +2,7 @@ import { Command } from 'commander';
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import ora from 'ora';
-import {
-  getArticlesByIds,
-  getUnbundledByAuthor,
-  markArticlesBundled,
-} from '../../db/queries/articles.js';
+import { getUnbundledByAuthor, markArticlesBundled } from '../../db/queries/articles.js';
 import { listAuthors } from '../../db/queries/authors.js';
 import { createBundle } from '../../db/queries/bundles.js';
 import { buildEpub, type EpubArticle } from '../../epub/builder.js';
@@ -45,6 +41,13 @@ function sanitizeFileName(name: string): string {
 
 function extractArticleIds(articles: ArticleRow[]): number[] {
   return articles.map((article) => article.id);
+}
+
+function extractPublicationName(articles: ArticleRow[]): string | null {
+  const uniqueNames = [
+    ...new Set(articles.map((article) => article.publicationName).filter(Boolean)),
+  ];
+  return uniqueNames.length === 1 ? uniqueNames[0]! : null;
 }
 
 function saveBundleToDisk(
@@ -139,16 +142,6 @@ async function splitIntoParts(
   }
 }
 
-function selectArticlesByIds(ids: string): { articles: ArticleRow[]; title: string } | null {
-  const parsedIds = ids.split(',').map((idString) => parseInt(idString.trim(), 10));
-  const articles = getArticlesByIds(parsedIds) as ArticleRow[];
-  if (articles.length === 0) return null;
-  return {
-    articles,
-    title: `Articles Bundle ${new Date().toISOString().slice(0, 10)}`,
-  };
-}
-
 function selectArticlesByAuthor(
   authorName: string,
 ): { articles: ArticleRow[]; title: string } | null {
@@ -161,44 +154,30 @@ function selectArticlesByAuthor(
   if (!matchedAuthor) return null;
 
   const articles = getUnbundledByAuthor(matchedAuthor.authorNormalized) as ArticleRow[];
-  return {
-    articles,
-    title: `${matchedAuthor.author} - Articles`,
-  };
+  const publicationName = extractPublicationName(articles);
+  const dateLabel = new Date().toISOString().slice(0, 10);
+  const title = publicationName
+    ? `${publicationName} - ${matchedAuthor.author} - Created ${dateLabel}`
+    : `${matchedAuthor.author} - Created ${dateLabel}`;
+  return { articles, title };
 }
 
 export function createBundleCommand(): Command {
   return new Command('bundle')
     .description('Create an EPUB bundle from selected articles')
-    .option('--articles <ids>', 'Comma-separated article IDs')
-    .option('--author <name>', 'Bundle all unbundled articles by author')
+    .requiredOption('--author <name>', 'Bundle all unbundled articles by author')
     .option('--title <title>', 'Custom bundle title')
-    .action(async (options: { articles?: string; author?: string; title?: string }) => {
-      if (!options.articles && !options.author) {
-        printError('Specify either --articles or --author');
+    .action(async (options: { author: string; title?: string }) => {
+      const selection = selectArticlesByAuthor(options.author);
+      if (!selection) {
+        printError(
+          `Author "${options.author}" not found. Run "articles2kindle list authors" to see available authors.`,
+        );
         process.exit(1);
       }
-
-      let selection: { articles: ArticleRow[]; title: string } | null;
-
-      if (options.articles) {
-        selection = selectArticlesByIds(options.articles);
-        if (!selection) {
-          printError('No articles found with the given IDs');
-          process.exit(1);
-        }
-      } else {
-        selection = selectArticlesByAuthor(options.author!);
-        if (!selection) {
-          printError(
-            `Author "${options.author}" not found. Run "articles2kindle list authors" to see available authors.`,
-          );
-          process.exit(1);
-        }
-        if (selection.articles.length === 0) {
-          printInfo('No unbundled articles found for this author.');
-          return;
-        }
+      if (selection.articles.length === 0) {
+        printInfo('No unbundled articles found for this author.');
+        return;
       }
 
       const bundleTitle = options.title ?? selection.title;
