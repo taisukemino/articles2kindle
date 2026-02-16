@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import ora from 'ora';
-import { getUnbundledByAuthor, markArticlesBundled } from '../../db/queries/articles.js';
-import { listAuthors } from '../../db/queries/authors.js';
+import { getUnbundledByPublication, markArticlesBundled } from '../../db/queries/articles.js';
+import { listPublications } from '../../db/queries/publications.js';
 import { createBundle } from '../../db/queries/bundles.js';
 import { buildEpub, type EpubArticle } from '../../epub/builder.js';
 import { getBundleDir } from '../../config/paths.js';
@@ -34,7 +34,7 @@ function toEpubArticle(article: ArticleRow): EpubArticle {
 
 function sanitizeFileName(name: string): string {
   return name
-    .replace(/[^a-zA-Z0-9-_ ()]/g, '')
+    .replace(/[^\p{L}\p{N}\-_ ()]/gu, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -43,11 +43,13 @@ function extractArticleIds(articles: ArticleRow[]): number[] {
   return articles.map((article) => article.id);
 }
 
-function extractPublicationName(articles: ArticleRow[]): string | null {
-  const uniqueNames = [
-    ...new Set(articles.map((article) => article.publicationName).filter(Boolean)),
-  ];
-  return uniqueNames.length === 1 ? uniqueNames[0]! : null;
+function summarizeAuthorNames(articles: ArticleRow[]): string {
+  const uniqueAuthors = [
+    ...new Set(articles.map((article) => article.author).filter(Boolean)),
+  ] as string[];
+  if (uniqueAuthors.length === 0) return 'Various Authors';
+  if (uniqueAuthors.length <= 2) return uniqueAuthors.join(', ');
+  return `${uniqueAuthors.slice(0, 2).join(', ')} and ${uniqueAuthors.length - 2} others`;
 }
 
 function saveBundleToDisk(
@@ -142,41 +144,39 @@ async function splitIntoParts(
   }
 }
 
-function selectArticlesByAuthor(
-  authorName: string,
+function selectArticlesByPublication(
+  publicationQuery: string,
 ): { articles: ArticleRow[]; title: string } | null {
-  const authors = listAuthors();
-  const authorQuery = authorName.toLowerCase().trim();
-  const matchedAuthor =
-    authors.find((entry) => entry.authorNormalized === authorQuery) ??
-    authors.find((entry) => entry.authorNormalized.includes(authorQuery));
+  const publications = listPublications();
+  const query = publicationQuery.toLowerCase().trim();
+  const matched =
+    publications.find((entry) => entry.publicationName.toLowerCase() === query) ??
+    publications.find((entry) => entry.publicationName.toLowerCase().includes(query));
 
-  if (!matchedAuthor) return null;
+  if (!matched) return null;
 
-  const articles = getUnbundledByAuthor(matchedAuthor.authorNormalized) as ArticleRow[];
-  const publicationName = extractPublicationName(articles);
+  const articles = getUnbundledByPublication(matched.publicationName) as ArticleRow[];
+  const authorSummary = summarizeAuthorNames(articles);
   const dateLabel = new Date().toISOString().slice(0, 10);
-  const title = publicationName
-    ? `${publicationName} - ${matchedAuthor.author} - Created ${dateLabel}`
-    : `${matchedAuthor.author} - Created ${dateLabel}`;
+  const title = `${matched.publicationName} - ${authorSummary} - Created ${dateLabel}`;
   return { articles, title };
 }
 
 export function createBundleCommand(): Command {
   return new Command('bundle')
     .description('Create an EPUB bundle from selected articles')
-    .requiredOption('--author <name>', 'Bundle all unbundled articles by author')
+    .requiredOption('--publication <name>', 'Bundle all unbundled articles by publication')
     .option('--title <title>', 'Custom bundle title')
-    .action(async (options: { author: string; title?: string }) => {
-      const selection = selectArticlesByAuthor(options.author);
+    .action(async (options: { publication: string; title?: string }) => {
+      const selection = selectArticlesByPublication(options.publication);
       if (!selection) {
         printError(
-          `Author "${options.author}" not found. Run "articles2kindle list authors" to see available authors.`,
+          `Publication "${options.publication}" not found. Run "articles2kindle list publications" to see available publications.`,
         );
         process.exit(1);
       }
       if (selection.articles.length === 0) {
-        printInfo('No unbundled articles found for this author.');
+        printInfo('No unbundled articles found for this publication.');
         return;
       }
 
