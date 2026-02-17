@@ -1,27 +1,16 @@
 import { Command } from 'commander';
 import ora from 'ora';
-import { getUnbundledByPublication } from '../../db/queries/articles.js';
-import { listPublications } from '../../db/queries/publications.js';
 import {
+  selectArticlesByPublication,
   bundlePublication,
   formatBundleSize,
-  type ArticleRow,
+  type BundleResult,
 } from '../../services/bundle.js';
 import { printSuccess, printError, printInfo } from '../output.js';
 
-function selectArticlesByPublication(
-  publicationQuery: string,
-): { publicationName: string; articles: ArticleRow[] } | null {
-  const publications = listPublications();
-  const query = publicationQuery.toLowerCase().trim();
-  const matched =
-    publications.find((entry) => entry.publicationName.toLowerCase() === query) ??
-    publications.find((entry) => entry.publicationName.toLowerCase().includes(query));
-
-  if (!matched) return null;
-
-  const articles = getUnbundledByPublication(matched.publicationName) as ArticleRow[];
-  return { publicationName: matched.publicationName, articles };
+function _printBundleResult(result: BundleResult): void {
+  printSuccess(`Bundle #${result.bundleId} created: ${result.filePath}`);
+  printInfo(`${result.articleCount} articles, ${formatBundleSize(result.fileSize)}MB`);
 }
 
 export function createBundleCommand(): Command {
@@ -29,7 +18,8 @@ export function createBundleCommand(): Command {
     .description('Create an EPUB bundle from selected articles')
     .requiredOption('--publication <name>', 'Bundle all unbundled articles by publication')
     .option('--title <title>', 'Custom bundle title')
-    .action(async (options: { publication: string; title?: string }) => {
+    .option('--with-images', 'Include images in the EPUB (slower, downloads external images)')
+    .action(async (options: { publication: string; title?: string; withImages?: boolean }) => {
       const selection = selectArticlesByPublication(options.publication);
       if (!selection) {
         printError(
@@ -42,12 +32,11 @@ export function createBundleCommand(): Command {
         return;
       }
 
-      const spinner = ora(
-        `Building EPUB with ${selection.articles.length} articles...`,
-      ).start();
+      const spinner = ora(`Building EPUB with ${selection.articles.length} articles...`).start();
 
       try {
         const results = await bundlePublication(selection.publicationName, {
+          withImages: options.withImages,
           onProgress: (message) => {
             spinner.text = message;
           },
@@ -56,8 +45,7 @@ export function createBundleCommand(): Command {
         spinner.stop();
 
         for (const result of results) {
-          printSuccess(`Bundle #${result.bundleId} created: ${result.filePath}`);
-          printInfo(`${result.articleCount} articles, ${formatBundleSize(result.fileSize)}MB`);
+          _printBundleResult(result);
         }
 
         if (results.length > 1) {

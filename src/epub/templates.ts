@@ -51,21 +51,23 @@ a {
 }
 `;
 
-export function sanitizeArticleHtml(html: string): string {
+export function sanitizeArticleHtml(html: string, withImages = false): string {
+  const extraTags = ['h1', 'h2', 'h3', 'figure', 'figcaption', 'pre', 'code'];
+  if (withImages) {
+    extraTags.push('img');
+  }
+
+  const allowedAttributes: Record<string, string[]> = {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    a: ['href', 'title'],
+  };
+  if (withImages) {
+    allowedAttributes['img'] = ['src', 'alt'];
+  }
+
   return sanitizeHtml(html, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
-      'h1',
-      'h2',
-      'h3',
-      'figure',
-      'figcaption',
-      'pre',
-      'code',
-    ]),
-    allowedAttributes: {
-      ...sanitizeHtml.defaults.allowedAttributes,
-      a: ['href', 'title'],
-    },
-    allowedSchemes: ['http', 'https'],
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(extraTags),
+    allowedAttributes,
+    allowedSchemes: ['http', 'https', 'data'],
   });
 }

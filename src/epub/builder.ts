@@ -13,11 +13,15 @@ export interface EpubArticle {
   readonly url: string | null;
 }
 
-export async function buildEpub(title: string, articleList: EpubArticle[]): Promise<Buffer> {
+export async function buildEpub(
+  title: string,
+  articleList: EpubArticle[],
+  withImages = false,
+): Promise<Buffer> {
   const chapters: Chapter[] = articleList.map((article) => {
     const meta = buildArticleMeta(article);
     const cleanHtml = article.contentHtml
-      ? sanitizeArticleHtml(article.contentHtml)
+      ? sanitizeArticleHtml(article.contentHtml, withImages)
       : '<p>No content available.</p>';
     const fullContent = `<div class="article-meta">${meta}</div>${cleanHtml}`;
 

@@ -4,12 +4,26 @@ import { stdin, stdout } from 'node:process';
 import { loadConfig, saveConfig, maskSecrets } from '../../config/manager.js';
 import { getConfigPath } from '../../config/paths.js';
 import { printSuccess, printInfo } from '../output.js';
-import type { AppConfig, FeedlyConfig, SmtpConfig, KindleConfig } from '../../config/schema.js';
+import type {
+  AppConfig,
+  FeedlyConfig,
+  SmtpConfig,
+  KindleConfig,
+  SubstackConfig,
+  SubstackPublication,
+} from '../../config/schema.js';
 
 async function promptFeedlyConfig(
   prompt: Interface,
   existing: Partial<AppConfig>,
-): Promise<FeedlyConfig> {
+): Promise<FeedlyConfig | undefined> {
+  const wantFeedly = await prompt.question(
+    `Configure Feedly?${existing.feedly ? ' (currently configured)' : ''} (y/N): `,
+  );
+  if (wantFeedly.toLowerCase() !== 'y') {
+    return existing.feedly;
+  }
+
   const accessToken = await prompt.question(
     `Feedly access token${existing.feedly?.accessToken ? ' (press Enter to keep current)' : ''}: `,
   );
@@ -20,6 +34,48 @@ async function promptFeedlyConfig(
     accessToken: accessToken || existing.feedly?.accessToken || '',
     streamId: streamId || existing.feedly?.streamId || '',
   };
+}
+
+async function promptSubstackConfig(
+  prompt: Interface,
+  existing: Partial<AppConfig>,
+): Promise<SubstackConfig | undefined> {
+  const existingUrls = existing.substack?.publications
+    ?.map((publication) => publication.url)
+    .join(', ');
+  const wantSubstack = await prompt.question(
+    `Configure Substack?${existingUrls ? ` (currently: ${existingUrls})` : ''} (y/N): `,
+  );
+  if (wantSubstack.toLowerCase() !== 'y') {
+    return existing.substack;
+  }
+
+  const urlsInput = await prompt.question(
+    `Publication URLs (comma-separated, e.g., https://example.substack.com)${existingUrls ? `\n  Current: ${existingUrls}\n  Press Enter to keep, or enter new URLs` : ''}: `,
+  );
+
+  let publications: SubstackPublication[];
+  if (urlsInput.trim()) {
+    publications = urlsInput
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((url) => ({ url }));
+  } else {
+    publications = [...(existing.substack?.publications ?? [])];
+  }
+
+  if (publications.length === 0) {
+    printInfo('No publications configured for Substack.');
+    return undefined;
+  }
+
+  printInfo(
+    'Set the SUBSTACK_CONNECT_SID environment variable with your connect.sid cookie for paywalled content.',
+  );
+  printInfo('Get it from: browser DevTools → Application → Cookies → connect.sid');
+
+  return { publications };
 }
 
 async function promptSmtpConfig(
@@ -80,10 +136,16 @@ export function createConfigCommand(): Command {
         printInfo('articles2kindle configuration wizard\n');
 
         const feedly = await promptFeedlyConfig(readlineInterface, existing);
+        const substack = await promptSubstackConfig(readlineInterface, existing);
         const smtp = await promptSmtpConfig(readlineInterface, existing);
         const kindle = await promptKindleConfig(readlineInterface, existing);
 
-        const config: Partial<AppConfig> = { feedly, smtp, kindle };
+        const config: Partial<AppConfig> = {
+          ...(feedly ? { feedly } : {}),
+          ...(substack ? { substack } : {}),
+          smtp,
+          kindle,
+        };
         saveConfig(config);
         printSuccess(`Config saved to ${getConfigPath()}`);
       } finally {

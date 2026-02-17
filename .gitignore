@@ -8,3 +8,4 @@ dist/
 *.tgz
 coverage/
 .DS_Store
+.claude/

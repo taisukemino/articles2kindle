@@ -2,36 +2,50 @@ import { Command } from 'commander';
 import ora from 'ora';
 import { loadConfig } from '../../config/manager.js';
 import { isValidConfig } from '../../config/schema.js';
-import { fetchArticles } from '../../services/fetch.js';
+import { fetchFromSource, getSourceNames } from '../../services/fetch.js';
 import { printSuccess, printError } from '../output.js';
 
 export function createFetchCommand(): Command {
   return new Command('fetch')
-    .description('Fetch new articles from Feedly Saved For Later')
+    .description('Fetch new articles from configured sources')
+    .option('--source <name>', 'Fetch from a specific source (feedly, substack)')
     .option('--full', 'Full re-fetch ignoring last timestamp')
-    .action(async (options: { full?: boolean }) => {
+    .action(async (options: { source?: string; full?: boolean }) => {
       const config = loadConfig();
       if (!isValidConfig(config)) {
         printError('Invalid configuration. Run "articles2kindle config init" first.');
         process.exit(1);
       }
 
-      const spinner = ora('Fetching articles from Feedly...').start();
+      const sourceNames = getSourceNames(config, options.source);
 
-      try {
-        const result = await fetchArticles(config, {
-          full: options.full,
-          onProgress: (progress) => {
-            spinner.text = `Fetched ${progress.fetched} articles (${progress.newCount} new)...`;
-          },
-        });
-
-        spinner.stop();
-        printSuccess(`Fetch complete: ${result.fetched} fetched, ${result.newCount} new articles`);
-      } catch (error) {
-        spinner.stop();
-        printError(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+      if (sourceNames.length === 0) {
+        printError('No sources configured. Run "articles2kindle config init" first.');
         process.exit(1);
+      }
+
+      for (const sourceName of sourceNames) {
+        const spinner = ora(`Fetching articles from ${sourceName}...`).start();
+
+        try {
+          const result = await fetchFromSource(sourceName, config, {
+            full: options.full,
+            onProgress: (progress) => {
+              spinner.text = `[${sourceName}] Fetched ${progress.fetchedCount} articles (${progress.newArticleCount} new)...`;
+            },
+          });
+
+          spinner.stop();
+          printSuccess(
+            `[${sourceName}] Fetch complete: ${result.fetchedCount} fetched, ${result.newArticleCount} new articles`,
+          );
+        } catch (error) {
+          spinner.stop();
+          printError(
+            `[${sourceName}] Fetch failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          process.exit(1);
+        }
       }
     });
 }

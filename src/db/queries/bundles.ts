@@ -76,10 +76,7 @@ export function getBundleById(id: number) {
 
 export function cleanupStaleBundles(): number {
   const database = getDatabase();
-  const all = database
-    .select({ id: bundles.id, filePath: bundles.filePath })
-    .from(bundles)
-    .all();
+  const all = database.select({ id: bundles.id, filePath: bundles.filePath }).from(bundles).all();
 
   let deleted = 0;
   for (const bundle of all) {

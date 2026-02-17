@@ -2,6 +2,20 @@ import { eq, and, like, desc } from 'drizzle-orm';
 import { getDatabase } from '../connection.js';
 import { articles } from '../schema.js';
 
+export function normalizeAuthor(author: string | null): string | null {
+  if (!author) return null;
+  return author.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+export function countWordsInHtml(html: string | null): number | null {
+  if (!html) return null;
+  const textOnly = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return textOnly.split(' ').filter(Boolean).length;
+}
+
 export interface InsertArticle {
   readonly sourceId: string;
   readonly sourceName: string;

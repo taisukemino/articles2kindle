@@ -1,6 +1,7 @@
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { getUnbundledByPublication, markArticlesBundled } from '../db/queries/articles.js';
+import { listPublications } from '../db/queries/publications.js';
 import { createBundle } from '../db/queries/bundles.js';
 import { buildEpub, type EpubArticle } from '../epub/builder.js';
 import { getBundleDir } from '../config/paths.js';
@@ -24,7 +25,7 @@ export interface BundleResult {
   readonly articleCount: number;
 }
 
-function toEpubArticle(article: ArticleRow): EpubArticle {
+function _toEpubArticle(article: ArticleRow): EpubArticle {
   return {
     title: article.title,
     author: article.author ?? null,
@@ -35,7 +36,7 @@ function toEpubArticle(article: ArticleRow): EpubArticle {
   };
 }
 
-function sanitizeFileName(name: string): string {
+function _sanitizeFileName(name: string): string {
   return name
     .replace(/[^\p{L}\p{N}\-_ ()]/gu, '')
     .replace(/\s+/g, ' ')
@@ -51,12 +52,8 @@ export function summarizeAuthorNames(articles: ArticleRow[]): string {
   return `${uniqueAuthors.slice(0, 2).join(', ')} and ${uniqueAuthors.length - 2} others`;
 }
 
-function saveBundleToDisk(
-  title: string,
-  epubBuffer: Buffer,
-  articleIds: number[],
-): BundleResult {
-  const fileName = `${sanitizeFileName(title)}.epub`;
+function _saveBundleToDisk(title: string, epubBuffer: Buffer, articleIds: number[]): BundleResult {
+  const fileName = `${_sanitizeFileName(title)}.epub`;
   const filePath = join(getBundleDir(), fileName);
   writeFileSync(filePath, epubBuffer);
   const fileSize = statSync(filePath).size;
@@ -83,34 +80,45 @@ export function formatBundleSize(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1);
 }
 
+export function selectArticlesByPublication(
+  publicationQuery: string,
+): { publicationName: string; articles: ArticleRow[] } | null {
+  const publications = listPublications();
+  const query = publicationQuery.toLowerCase().trim();
+  const matched =
+    publications.find((entry) => entry.publicationName.toLowerCase() === query) ??
+    publications.find((entry) => entry.publicationName.toLowerCase().includes(query));
+
+  if (!matched) return null;
+
+  const articles = getUnbundledByPublication(matched.publicationName) as ArticleRow[];
+  return { publicationName: matched.publicationName, articles };
+}
+
 /**
  * Bundle all unbundled articles for a publication into one or more EPUBs.
  * Automatically splits into parts if the EPUB exceeds MAX_BUNDLE_SIZE.
  */
 export async function bundlePublication(
   publicationName: string,
-  options: { onProgress?: (message: string) => void } = {},
+  options: { withImages?: boolean; onProgress?: (message: string) => void } = {},
 ): Promise<BundleResult[]> {
   const articles = getUnbundledByPublication(publicationName) as ArticleRow[];
   if (articles.length === 0) return [];
 
+  const withImages = options.withImages ?? false;
   const baseTitle = buildBundleTitle(publicationName, articles);
-  const epubBuffer = await buildEpub(baseTitle, articles.map(toEpubArticle));
-
-  if (!epubBuffer) {
-    throw new Error(`Failed to build EPUB for "${publicationName}"`);
-  }
+  const epubBuffer = await buildEpub(baseTitle, articles.map(_toEpubArticle), withImages);
 
   if (epubBuffer.length <= MAX_BUNDLE_SIZE) {
-    const result = saveBundleToDisk(
+    const result = _saveBundleToDisk(
       baseTitle,
       epubBuffer,
-      articles.map((a) => a.id),
+      articles.map((article) => article.id),
     );
     return [result];
   }
 
-  // Split into parts
   options.onProgress?.('Bundle too large, splitting into parts...');
   const results: BundleResult[] = [];
   let currentChunk: ArticleRow[] = [];
@@ -123,13 +131,15 @@ export async function bundlePublication(
 
     const testBuffer = await buildEpub(
       `${baseTitle} (Part ${partNumber})`,
-      currentChunk.map(toEpubArticle),
+      currentChunk.map(_toEpubArticle),
+      withImages,
     );
 
     if (testBuffer.length > MAX_BUNDLE_SIZE && currentChunk.length > 1) {
       currentChunk.pop();
       const partTitle = `${baseTitle} (Part ${partNumber})`;
-      const result = saveBundleToDisk(partTitle, lastGoodBuffer!, currentChunk.map((a) => a.id));
+      const articleIds = currentChunk.map((chunkArticle) => chunkArticle.id);
+      const result = _saveBundleToDisk(partTitle, lastGoodBuffer!, articleIds);
       results.push(result);
       partNumber++;
       currentChunk = [article];
@@ -142,8 +152,9 @@ export async function bundlePublication(
   if (currentChunk.length > 0) {
     const partTitle = partNumber === 1 ? baseTitle : `${baseTitle} (Part ${partNumber})`;
     const finalBuffer =
-      lastGoodBuffer ?? (await buildEpub(partTitle, currentChunk.map(toEpubArticle)));
-    const result = saveBundleToDisk(partTitle, finalBuffer, currentChunk.map((a) => a.id));
+      lastGoodBuffer ?? (await buildEpub(partTitle, currentChunk.map(_toEpubArticle), withImages));
+    const articleIds = currentChunk.map((chunkArticle) => chunkArticle.id);
+    const result = _saveBundleToDisk(partTitle, finalBuffer, articleIds);
     results.push(result);
   }
 
