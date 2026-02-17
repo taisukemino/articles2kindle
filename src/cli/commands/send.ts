@@ -2,22 +2,9 @@ import { Command } from 'commander';
 import ora from 'ora';
 import { loadConfig } from '../../config/manager.js';
 import { isValidConfig } from '../../config/schema.js';
-import { getLatestUnsentBundle, getBundleById, markBundleSent } from '../../db/queries/bundles.js';
-import { sendToKindle } from '../../email/sender.js';
+import { getLatestUnsentBundle, getBundleById } from '../../db/queries/bundles.js';
+import { sendBundleToKindle, cleanupStaleBundles } from '../../services/send.js';
 import { printSuccess, printError, printInfo } from '../output.js';
-
-function getAllKindleEmails(config: {
-  kindle: { email: string; emails?: readonly string[] };
-}): string[] {
-  const allEmails = new Set<string>();
-  allEmails.add(config.kindle.email);
-  if (config.kindle.emails) {
-    for (const email of config.kindle.emails) {
-      allEmails.add(email);
-    }
-  }
-  return [...allEmails];
-}
 
 export function createSendCommand(): Command {
   return new Command('send')
@@ -28,6 +15,11 @@ export function createSendCommand(): Command {
       if (!isValidConfig(config)) {
         printError('Invalid configuration. Run "articles2kindle config init" first.');
         process.exit(1);
+      }
+
+      const staleCount = cleanupStaleBundles();
+      if (staleCount > 0) {
+        printInfo(`Cleaned up ${staleCount} stale bundle(s) with missing files.`);
       }
 
       const bundle = options.bundle
@@ -44,25 +36,12 @@ export function createSendCommand(): Command {
         process.exit(1);
       }
 
-      const kindleEmails = getAllKindleEmails(config);
-      const spinner = ora(
-        `Sending "${bundle.title}" to ${kindleEmails.length} device(s)...`,
-      ).start();
+      const spinner = ora(`Sending "${bundle.title}"...`).start();
 
       try {
-        await sendToKindle({
-          smtpConfig: config.smtp,
-          fromEmail: config.kindle.senderEmail,
-          toEmails: kindleEmails,
-          epubPath: bundle.filePath,
-          bundleTitle: bundle.title,
-        });
-
-        const allRecipients = kindleEmails.join(', ');
-        markBundleSent(bundle.id, allRecipients);
-
+        const sentTo = await sendBundleToKindle(bundle.id, config);
         spinner.stop();
-        printSuccess(`Bundle #${bundle.id} sent to ${allRecipients}`);
+        printSuccess(`Bundle #${bundle.id} sent to ${sentTo}`);
       } catch (error) {
         spinner.stop();
         printError(`Failed to send: ${error instanceof Error ? error.message : String(error)}`);

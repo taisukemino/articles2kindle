@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { eq, isNull, desc } from 'drizzle-orm';
 import { getDatabase } from '../connection.js';
 import { bundles, bundleArticles } from '../schema.js';
@@ -71,6 +72,25 @@ export function getLatestUnsentBundle() {
 export function getBundleById(id: number) {
   const database = getDatabase();
   return database.select().from(bundles).where(eq(bundles.id, id)).get();
+}
+
+export function cleanupStaleBundles(): number {
+  const database = getDatabase();
+  const all = database
+    .select({ id: bundles.id, filePath: bundles.filePath })
+    .from(bundles)
+    .all();
+
+  let deleted = 0;
+  for (const bundle of all) {
+    const fileIsMissing = !bundle.filePath || !existsSync(bundle.filePath);
+    if (fileIsMissing) {
+      database.delete(bundleArticles).where(eq(bundleArticles.bundleId, bundle.id)).run();
+      database.delete(bundles).where(eq(bundles.id, bundle.id)).run();
+      deleted++;
+    }
+  }
+  return deleted;
 }
 
 export function markBundleSent(bundleId: number, sentTo: string): void {
