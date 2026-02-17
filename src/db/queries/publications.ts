@@ -8,6 +8,21 @@ export interface PublicationSummary {
   unbundledCount: number;
 }
 
+export function listPublicationNamesByFolder(folderName: string): string[] {
+  const db = getDatabase();
+  const rows = db
+    .selectDistinct({ publicationName: articles.publicationName })
+    .from(articles)
+    .where(
+      sql`${articles.publicationName} is not null and exists (
+        select 1 from json_each(${articles.tags}) where json_each.value = ${folderName}
+      )`,
+    )
+    .all();
+
+  return rows.map((row) => row.publicationName).filter((name): name is string => name !== null);
+}
+
 export function listPublications(): PublicationSummary[] {
   const db = getDatabase();
   const rows = db
