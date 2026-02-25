@@ -1,7 +1,12 @@
 import { desc, eq } from 'drizzle-orm';
 import type { AppConfig } from '../config/schema.js';
 import { getAdapter, getConfiguredAdapterNames } from '../sources/registry.js';
-import { upsertArticle, normalizeAuthor, countWordsInHtml } from '../db/queries/articles.js';
+import {
+  upsertArticle,
+  normalizeAuthor,
+  countWordsInHtml,
+  getSourceIds,
+} from '../db/queries/articles.js';
 import { getDatabase } from '../db/connection.js';
 import { syncLog } from '../db/schema.js';
 
@@ -31,14 +36,32 @@ export interface FetchProgress {
   readonly newArticleCount: number;
 }
 
+/**
+ * Resolve which source names to fetch from, either a single filter or all configured sources.
+ *
+ * @param config - The application configuration containing source definitions
+ * @param sourceFilter - Optional source name to restrict fetching to a single source
+ * @returns The list of source names to fetch from
+ */
 export function getSourceNames(config: AppConfig, sourceFilter?: string): string[] {
   return sourceFilter ? [sourceFilter] : getConfiguredAdapterNames(config);
 }
 
+/**
+ * Fetch articles from a single source, upsert them into the database, and log the sync.
+ *
+ * @param sourceName - The name of the source to fetch from
+ * @param config - The application configuration
+ * @param options - Configuration for the fetch operation
+ * @param options.full - Whether to perform a full fetch ignoring the last sync timestamp
+ * @param options.limit
+ * @param options.onProgress - Callback invoked after each batch with running totals
+ * @returns The total number of articles fetched and the count of newly inserted articles
+ */
 export async function fetchFromSource(
   sourceName: string,
   config: AppConfig,
-  options: { full?: boolean; onProgress?: (progress: FetchProgress) => void } = {},
+  options: { full?: boolean; limit?: number; onProgress?: (progress: FetchProgress) => void } = {},
 ): Promise<FetchResult> {
   const database = getDatabase();
   const newerThan = options.full ? undefined : _getLastFetchTimestamp(sourceName);
@@ -51,10 +74,16 @@ export async function fetchFromSource(
 
   try {
     const adapter = getAdapter(sourceName, config);
+    const knownSourceIds =
+      sourceName === 'x' && !options.full ? getSourceIds(sourceName) : undefined;
     let fetchedCount = 0;
     let newArticleCount = 0;
 
-    for await (const batch of adapter.fetchArticles({ newerThan })) {
+    for await (const batch of adapter.fetchArticles({
+      newerThan,
+      knownSourceIds,
+      count: options.limit,
+    })) {
       for (const article of batch) {
         const isNew = upsertArticle({
           ...article,

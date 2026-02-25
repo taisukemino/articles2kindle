@@ -1,33 +1,77 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import TOML from '@iarna/toml';
-import { getConfigPath } from './paths.js';
-import type { AppConfig } from './schema.js';
+import type { AppConfig, SubstackPublication } from './schema.js';
 
+function parseSubstackUrls(raw: string): SubstackPublication[] {
+  return raw
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url) => ({ url }));
+}
+
+function parseKindleEmails(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
+function parseSmtpPort(raw: string | undefined): number | undefined {
+  const value = raw ?? '587';
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+/**
+ * Loads the application configuration from environment variables.
+ *
+ * @returns The parsed configuration built from env vars
+ */
 export function loadConfig(): Partial<AppConfig> {
-  const configPath = getConfigPath();
-  if (!existsSync(configPath)) {
-    return {};
-  }
-  const raw = readFileSync(configPath, 'utf-8');
-  return TOML.parse(raw) as unknown as Partial<AppConfig>;
-}
+  const feedlyAccessToken = process.env['FEEDLY_ACCESS_TOKEN'];
+  const feedlyStreamId = process.env['FEEDLY_STREAM_ID'];
 
-export function saveConfig(config: Partial<AppConfig>): void {
-  const configPath = getConfigPath();
-  const tomlString = TOML.stringify(config as unknown as TOML.JsonMap);
-  writeFileSync(configPath, tomlString, 'utf-8');
-}
+  const substackUrls = process.env['SUBSTACK_URLS'];
+  const substackPublications = substackUrls ? parseSubstackUrls(substackUrls) : [];
 
-export function maskSecrets(config: Partial<AppConfig>): Record<string, unknown> {
-  const masked = JSON.parse(JSON.stringify(config)) as Record<string, Record<string, unknown>>;
+  const smtpHost = process.env['SMTP_HOST'];
+  const smtpUser = process.env['SMTP_USER'];
+  const smtpPass = process.env['SMTP_PASS'];
+  const smtpPort = parseSmtpPort(process.env['SMTP_PORT']);
 
-  if (masked['feedly']?.['accessToken']) {
-    const token = String(masked['feedly']['accessToken']);
-    masked['feedly']['accessToken'] = token.slice(0, 8) + '...' + token.slice(-4);
-  }
-  if (masked['smtp']?.['pass']) {
-    masked['smtp']['pass'] = '********';
-  }
+  const kindleEmail = process.env['KINDLE_EMAIL'];
+  const kindleSenderEmail = process.env['KINDLE_SENDER_EMAIL'];
+  const extraEmails = process.env['KINDLE_EMAILS'];
 
-  return masked;
+  return {
+    ...(feedlyAccessToken && feedlyStreamId
+      ? { feedly: { accessToken: feedlyAccessToken, streamId: feedlyStreamId } }
+      : {}),
+    ...(substackPublications.length > 0
+      ? { substack: { publications: substackPublications } }
+      : {}),
+    ...(smtpHost && smtpUser && smtpPass && smtpPort !== undefined
+      ? {
+          smtp: {
+            host: smtpHost,
+            port: smtpPort,
+            secure: process.env['SMTP_SECURE'] !== 'false',
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        }
+      : {}),
+    ...(kindleEmail && kindleSenderEmail
+      ? {
+          kindle: {
+            email: kindleEmail,
+            senderEmail: kindleSenderEmail,
+            ...(extraEmails ? { emails: parseKindleEmails(extraEmails) } : {}),
+          },
+        }
+      : {}),
+  };
 }

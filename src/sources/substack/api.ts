@@ -30,6 +30,9 @@ function _delay(milliseconds: number): Promise<void> {
 export class SubstackApiClient {
   private readonly connectSid: string | undefined;
 
+  /**
+   * Create a Substack API client, reading the optional connect.sid cookie from env.
+   */
   constructor() {
     this.connectSid = process.env['SUBSTACK_CONNECT_SID'];
   }
@@ -38,6 +41,13 @@ export class SubstackApiClient {
     return url.replace(/\/+$/, '');
   }
 
+  /**
+   * Fetch a page of archive posts from a Substack publication.
+   *
+   * @param publicationUrl - Base URL of the Substack publication
+   * @param offset - Number of posts to skip for pagination
+   * @returns Array of archive post summaries
+   */
   async fetchArchivePage(publicationUrl: string, offset: number): Promise<SubstackArchivePost[]> {
     const baseUrl = this._stripTrailingSlashes(publicationUrl);
     const url = new URL(`${baseUrl}/api/v1/archive`);
@@ -57,6 +67,13 @@ export class SubstackApiClient {
     return response.json() as Promise<SubstackArchivePost[]>;
   }
 
+  /**
+   * Fetch the full content of a single Substack post by slug.
+   *
+   * @param publicationUrl - Base URL of the Substack publication
+   * @param slug - URL slug identifying the post
+   * @returns Full post including body HTML
+   */
   async fetchFullPost(publicationUrl: string, slug: string): Promise<SubstackFullPost> {
     const baseUrl = this._stripTrailingSlashes(publicationUrl);
     const url = `${baseUrl}/api/v1/posts/${slug}`;
@@ -81,6 +98,11 @@ export class SubstackApiClient {
     return response.json() as Promise<SubstackFullPost>;
   }
 
+  /**
+   * Check whether a connect.sid cookie is available for authenticated requests.
+   *
+   * @returns True if the client can make authenticated requests
+   */
   hasAuthentication(): boolean {
     return !!this.connectSid;
   }

@@ -10,15 +10,29 @@ export class FeedlyAdapter implements SourceAdapter {
   private readonly client: FeedlyApiClient;
   private readonly streamId: string;
 
+  /**
+   * Create a Feedly adapter with the given configuration.
+   *
+   * @param config - Feedly-specific configuration (access token and stream ID)
+   */
   constructor(config: FeedlyConfig) {
     this.client = new FeedlyApiClient(config.accessToken);
     this.streamId = config.streamId;
   }
 
+  /**
+   * Validate the Feedly connection by fetching collections.
+   */
   async validateConnection(): Promise<void> {
     await this.client.getCollections();
   }
 
+  /**
+   * Fetch articles from the configured Feedly stream, yielding batches.
+   *
+   * @param options - Fetch constraints (count limit, newerThan cutoff)
+   * @returns Async generator yielding batches of mapped source articles
+   */
   async *fetchArticles(options: FetchOptions): AsyncGenerator<SourceArticle[]> {
     let continuation: string | undefined;
     let totalFetched = 0;
@@ -41,6 +55,11 @@ export class FeedlyAdapter implements SourceAdapter {
     } while (continuation && totalFetched < maxCount);
   }
 
+  /**
+   * List available Feedly collections (categories/boards).
+   *
+   * @returns Array of collections with id and label
+   */
   async listCollections(): Promise<Collection[]> {
     const collections = await this.client.getCollections();
     return collections.map((collection) => ({ id: collection.id, label: collection.label }));

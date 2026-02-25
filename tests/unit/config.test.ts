@@ -4,7 +4,6 @@ import {
   hasValidFeedlyConfig,
   hasValidSubstackConfig,
 } from '../../src/config/schema.js';
-import { maskSecrets } from '../../src/config/manager.js';
 
 const VALID_SMTP = {
   host: 'smtp.gmail.com',
@@ -80,20 +79,5 @@ describe('hasValidSubstackConfig', () => {
 
   it('should return false when substack is missing', () => {
     expect(hasValidSubstackConfig({})).toBe(false);
-  });
-});
-
-describe('maskSecrets', () => {
-  it('should mask feedly token and smtp password', () => {
-    const config = {
-      feedly: { accessToken: 'abcdefghijklmnop', streamId: 'stream/1' },
-      smtp: { host: 'smtp.gmail.com', port: 587, secure: true, user: 'u', pass: 'mysecret' },
-      kindle: { email: 'a@kindle.com', senderEmail: 'b@gmail.com' },
-    };
-    const masked = maskSecrets(config);
-    const feedlyConfig = masked['feedly'] as Record<string, string>;
-    const smtpConfig = masked['smtp'] as Record<string, string>;
-    expect(feedlyConfig['accessToken']).toBe('abcdefgh...mnop');
-    expect(smtpConfig['pass']).toBe('********');
   });
 });

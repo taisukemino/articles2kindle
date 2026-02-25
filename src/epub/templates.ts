@@ -51,6 +51,11 @@ a {
 }
 `;
 
+/**
+ *
+ * @param html
+ * @param withImages
+ */
 export function sanitizeArticleHtml(html: string, withImages = false): string {
   const extraTags = ['h1', 'h2', 'h3', 'figure', 'figcaption', 'pre', 'code'];
   if (withImages) {
@@ -68,6 +73,6 @@ export function sanitizeArticleHtml(html: string, withImages = false): string {
   return sanitizeHtml(html, {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat(extraTags),
     allowedAttributes,
-    allowedSchemes: ['http', 'https', 'data'],
+    allowedSchemes: ['http', 'https', 'data', 'file'],
   });
 }

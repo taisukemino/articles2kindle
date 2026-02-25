@@ -11,6 +11,10 @@ export interface InsertBundle {
   readonly articleIds: readonly number[];
 }
 
+/**
+ *
+ * @param bundle
+ */
 export function createBundle(bundle: InsertBundle): number {
   const database = getDatabase();
   const now = new Date().toISOString();
@@ -41,6 +45,9 @@ export function createBundle(bundle: InsertBundle): number {
   return result.id;
 }
 
+/**
+ *
+ */
 export function listBundles() {
   const database = getDatabase();
   return database
@@ -58,6 +65,9 @@ export function listBundles() {
     .all();
 }
 
+/**
+ *
+ */
 export function getLatestUnsentBundle() {
   const database = getDatabase();
   return database
@@ -69,11 +79,18 @@ export function getLatestUnsentBundle() {
     .get();
 }
 
+/**
+ *
+ * @param id
+ */
 export function getBundleById(id: number) {
   const database = getDatabase();
   return database.select().from(bundles).where(eq(bundles.id, id)).get();
 }
 
+/**
+ *
+ */
 export function cleanupStaleBundles(): number {
   const database = getDatabase();
   const all = database.select({ id: bundles.id, filePath: bundles.filePath }).from(bundles).all();
@@ -90,6 +107,11 @@ export function cleanupStaleBundles(): number {
   return deleted;
 }
 
+/**
+ *
+ * @param bundleId
+ * @param sentTo
+ */
 export function markBundleSent(bundleId: number, sentTo: string): void {
   const database = getDatabase();
   const now = new Date().toISOString();

@@ -8,6 +8,10 @@ export interface PublicationSummary {
   unbundledCount: number;
 }
 
+/**
+ *
+ * @param folderName
+ */
 export function listPublicationNamesByFolder(folderName: string): string[] {
   const db = getDatabase();
   const rows = db
@@ -23,6 +27,9 @@ export function listPublicationNamesByFolder(folderName: string): string[] {
   return rows.map((row) => row.publicationName).filter((name): name is string => name !== null);
 }
 
+/**
+ *
+ */
 export function listPublications(): PublicationSummary[] {
   const db = getDatabase();
   const rows = db

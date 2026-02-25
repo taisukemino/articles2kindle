@@ -1,6 +1,14 @@
 import type { SubstackFullPost } from './api.js';
 import type { SourceArticle } from '../types.js';
 
+/**
+ * Map a raw Substack post to a normalized SourceArticle.
+ *
+ * @param post - Full post data from the Substack API
+ * @param publicationUrl - Base URL of the publication (used for source ID)
+ * @param publicationLabel - Optional display label for the publication
+ * @returns Normalized source article
+ */
 export function mapSubstackPost(
   post: SubstackFullPost,
   publicationUrl: string,

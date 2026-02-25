@@ -6,6 +6,12 @@ function extractLabels(items: Array<{ label?: string }> | undefined): string[] {
   return items.map((item) => item.label).filter((label): label is string => label !== undefined);
 }
 
+/**
+ * Map a raw Feedly entry to a normalized SourceArticle.
+ *
+ * @param entry - Raw entry from the Feedly API
+ * @returns Normalized source article
+ */
 export function mapFeedlyEntry(entry: FeedlyEntry): SourceArticle {
   const contentHtml = entry.content?.content ?? entry.summary?.content ?? null;
   const url = entry.alternate?.[0]?.href ?? null;

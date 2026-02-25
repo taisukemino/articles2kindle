@@ -1,5 +1,6 @@
 import { EPub, type Chapter, type Options } from 'epub-gen-memory';
 import { EPUB_CSS, sanitizeArticleHtml } from './templates.js';
+import { preDownloadImages, replaceImageUrls, cleanupTempImages } from './image-downloader.js';
 
 const FETCH_TIMEOUT = 5000;
 const RETRY_TIMES = 1;
@@ -13,6 +14,16 @@ export interface EpubArticle {
   readonly url: string | null;
 }
 
+/**
+ * Build an EPUB buffer from a list of articles.
+ * When withImages is true, images are pre-downloaded to local temp files
+ * to avoid epub-gen-memory's unreliable external fetch timeouts.
+ *
+ * @param title - EPUB title
+ * @param articleList - Articles to include as chapters
+ * @param withImages - Whether to include images in the EPUB
+ * @returns EPUB file as a Buffer
+ */
 export async function buildEpub(
   title: string,
   articleList: EpubArticle[],
@@ -31,6 +42,16 @@ export async function buildEpub(
     };
   });
 
+  // Pre-download images to local files so epub-gen-memory reads file:// paths
+  // instead of fetching external URLs (which can hang indefinitely)
+  let imageUrlMap: Map<string, string> | undefined;
+  if (withImages) {
+    imageUrlMap = await preDownloadImages(chapters.map((chapter) => chapter.content));
+    for (const chapter of chapters) {
+      chapter.content = replaceImageUrls(chapter.content, imageUrlMap);
+    }
+  }
+
   const options: Options = {
     title,
     author: summarizeAuthors(articleList),
@@ -40,7 +61,13 @@ export async function buildEpub(
     retryTimes: RETRY_TIMES,
   };
 
-  return new EPub(options, chapters).genEpub();
+  try {
+    return await new EPub(options, chapters).genEpub();
+  } finally {
+    if (imageUrlMap) {
+      cleanupTempImages(imageUrlMap);
+    }
+  }
 }
 
 function buildArticleMeta(article: EpubArticle): string {

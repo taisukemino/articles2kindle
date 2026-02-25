@@ -29,10 +29,21 @@ export interface StreamContentsParams {
 export class FeedlyApiClient {
   private readonly accessToken: string;
 
+  /**
+   * Create a Feedly API client.
+   *
+   * @param accessToken - Feedly developer access token for authentication
+   */
   constructor(accessToken: string) {
     this.accessToken = accessToken;
   }
 
+  /**
+   * Fetch a page of entries from a Feedly stream.
+   *
+   * @param params - Stream query parameters (streamId, count, newerThan, continuation)
+   * @returns Paginated stream response containing entries and optional continuation token
+   */
   async getStreamContents(params: StreamContentsParams): Promise<FeedlyStreamResponse> {
     const url = new URL(`${FEEDLY_BASE_URL}/v3/streams/contents`);
     url.searchParams.set('streamId', params.streamId);
@@ -58,6 +69,11 @@ export class FeedlyApiClient {
     return response.json() as Promise<FeedlyStreamResponse>;
   }
 
+  /**
+   * Fetch all collections (categories/boards) for the authenticated user.
+   *
+   * @returns Array of collections with id and label
+   */
   async getCollections(): Promise<Array<{ id: string; label: string }>> {
     const response = await fetch(`${FEEDLY_BASE_URL}/v3/collections`, {
       headers: {
