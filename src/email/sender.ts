@@ -12,6 +12,10 @@ export interface SendOptions {
   readonly bundleTitle: string;
 }
 
+/**
+ *
+ * @param options
+ */
 export async function sendToKindle(options: SendOptions): Promise<void> {
   const fileBuffer = readFileSync(options.epubPath);
 

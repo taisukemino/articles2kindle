@@ -14,6 +14,7 @@ export interface SourceArticle {
 export interface FetchOptions {
   readonly newerThan?: number;
   readonly count?: number;
+  readonly knownSourceIds?: ReadonlySet<string>;
 }
 
 export interface Collection {

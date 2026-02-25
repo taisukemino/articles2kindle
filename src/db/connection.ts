@@ -5,6 +5,11 @@ import * as schema from './schema.js';
 
 let _database: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
+/**
+ * Returns the singleton Drizzle database instance, initializing it on first call.
+ *
+ * @returns The Drizzle ORM database instance
+ */
 export function getDatabase() {
   if (!_database) {
     const dbPath = getDatabasePath();

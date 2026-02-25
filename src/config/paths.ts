@@ -4,24 +4,30 @@ import { join } from 'node:path';
 
 const paths = envPaths('articles2kindle', { suffix: '' });
 
-export function getConfigDir(): string {
-  mkdirSync(paths.config, { recursive: true });
-  return paths.config;
-}
-
+/**
+ * Returns the platform-specific data directory, creating it if necessary.
+ *
+ * @returns The absolute path to the data directory
+ */
 export function getDataDir(): string {
   mkdirSync(paths.data, { recursive: true });
   return paths.data;
 }
 
-export function getConfigPath(): string {
-  return join(getConfigDir(), 'config.toml');
-}
-
+/**
+ * Returns the full path to the SQLite database file.
+ *
+ * @returns The absolute path to articles2kindle.db
+ */
 export function getDatabasePath(): string {
   return join(getDataDir(), 'articles2kindle.db');
 }
 
+/**
+ * Returns the directory used for storing article bundles, creating it if necessary.
+ *
+ * @returns The absolute path to the bundles directory
+ */
 export function getBundleDir(): string {
   const bundleDir = join(getDataDir(), 'bundles');
   mkdirSync(bundleDir, { recursive: true });

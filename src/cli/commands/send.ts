@@ -6,6 +6,11 @@ import { getLatestUnsentBundle, getBundleById } from '../../db/queries/bundles.j
 import { sendBundleToKindle, cleanupStaleBundles } from '../../services/send.js';
 import { printSuccess, printError, printInfo } from '../output.js';
 
+/**
+ * Creates the CLI command for sending EPUB bundles to Kindle via email.
+ *
+ * @returns The configured Commander command for sending
+ */
 export function createSendCommand(): Command {
   return new Command('send')
     .description('Send an EPUB bundle to Kindle via email')
@@ -13,7 +18,9 @@ export function createSendCommand(): Command {
     .action(async (options: { bundle?: string }) => {
       const config = loadConfig();
       if (!isValidConfig(config)) {
-        printError('Invalid configuration. Run "articles2kindle config init" first.');
+        printError(
+          'Invalid configuration. Check your .env file — see .env.example for required variables.',
+        );
         process.exit(1);
       }
 

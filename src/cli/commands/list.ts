@@ -4,15 +4,22 @@ import { listPublications } from '../../db/queries/publications.js';
 import { listBundles } from '../../db/queries/bundles.js';
 import { printTable, printInfo, truncate, formatDate, formatFileSize } from '../output.js';
 
+/**
+ * Creates the CLI command for listing articles, publications, and bundles.
+ *
+ * @returns The configured Commander command for listing
+ */
 export function createListCommand(): Command {
   const listCmd = new Command('list')
     .description('List articles, publications, or bundles')
     .option('--author <name>', 'Filter by author name')
+    .option('--source <name>', 'Filter by source (e.g. feedly, substack, x)')
     .option('--all', 'Include bundled articles')
     .option('--limit <n>', 'Limit number of results', '50')
-    .action((options: { author?: string; all?: boolean; limit: string }) => {
+    .action((options: { author?: string; source?: string; all?: boolean; limit: string }) => {
       const articleRows = listArticles({
         author: options.author,
+        sourceName: options.source,
         unbundledOnly: !options.all,
         limit: parseInt(options.limit, 10),
       });

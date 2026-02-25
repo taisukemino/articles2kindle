@@ -1,6 +1,10 @@
 import { writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { getUnbundledByPublication, markArticlesBundled } from '../db/queries/articles.js';
+import {
+  getUnbundledByPublication,
+  getUnbundledBySource,
+  markArticlesBundled,
+} from '../db/queries/articles.js';
 import { listPublications } from '../db/queries/publications.js';
 import { createBundle } from '../db/queries/bundles.js';
 import { buildEpub, type EpubArticle } from '../epub/builder.js';
@@ -43,6 +47,12 @@ function _sanitizeFileName(name: string): string {
     .trim();
 }
 
+/**
+ * Summarize the unique author names from a list of articles into a readable string.
+ *
+ * @param articles - The articles to extract author names from
+ * @returns A comma-separated summary of author names, truncated with "and N others" if more than two
+ */
 export function summarizeAuthorNames(articles: ArticleRow[]): string {
   const uniqueAuthors = [
     ...new Set(articles.map((article) => article.author).filter(Boolean)),
@@ -70,16 +80,35 @@ function _saveBundleToDisk(title: string, epubBuffer: Buffer, articleIds: number
   return { bundleId, filePath, fileSize, articleCount: articleIds.length };
 }
 
+/**
+ * Build a descriptive bundle title from the publication name, authors, and current date.
+ *
+ * @param publicationName - The name of the publication
+ * @param articles - The articles included in the bundle
+ * @returns A formatted title string like "Publication - Authors - Created YYYY-MM-DD"
+ */
 export function buildBundleTitle(publicationName: string, articles: ArticleRow[]): string {
   const authorSummary = summarizeAuthorNames(articles);
   const dateLabel = new Date().toISOString().slice(0, 10);
   return `${publicationName} - ${authorSummary} - Created ${dateLabel}`;
 }
 
+/**
+ * Format a byte count as a human-readable megabyte string.
+ *
+ * @param bytes - The file size in bytes
+ * @returns The size formatted as megabytes with one decimal place (e.g. "1.5")
+ */
 export function formatBundleSize(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1);
 }
 
+/**
+ * Find a publication matching the query and return its unbundled articles.
+ *
+ * @param publicationQuery - A full or partial publication name to search for
+ * @returns The matched publication name and its unbundled articles, or null if no match is found
+ */
 export function selectArticlesByPublication(
   publicationQuery: string,
 ): { publicationName: string; articles: ArticleRow[] } | null {
@@ -96,18 +125,49 @@ export function selectArticlesByPublication(
 }
 
 /**
- * Bundle all unbundled articles for a publication into one or more EPUBs.
- * Automatically splits into parts if the EPUB exceeds MAX_BUNDLE_SIZE.
+ * Return all unbundled articles for a source.
+ *
+ * @param sourceName - The source name (e.g. "feedly", "substack", "x")
+ * @returns The source label and its unbundled articles, or null if none exist
  */
-export async function bundlePublication(
-  publicationName: string,
-  options: { withImages?: boolean; onProgress?: (message: string) => void } = {},
+export function selectArticlesBySource(
+  sourceName: string,
+): { label: string; articles: ArticleRow[] } | null {
+  const articles = getUnbundledBySource(sourceName) as ArticleRow[];
+  if (articles.length === 0) return null;
+
+  const SOURCE_LABELS: Record<string, string> = {
+    feedly: 'Feedly',
+    substack: 'Substack',
+    x: 'X Bookmarks',
+  };
+  const label = SOURCE_LABELS[sourceName] ?? sourceName;
+  return { label, articles };
+}
+
+interface BundleOptions {
+  readonly withImages?: boolean;
+  readonly onProgress?: (message: string) => void;
+}
+
+/**
+ * Bundle a list of articles into one or more EPUBs.
+ * Automatically splits into parts if the EPUB exceeds MAX_BUNDLE_SIZE.
+ *
+ * @param label - Human-readable label used in the bundle title (e.g. publication name or source name)
+ * @param articles - The articles to bundle
+ * @param options - Configuration for the bundling process
+ * @returns The list of created bundles (empty if no articles provided)
+ */
+export async function bundleArticles(
+  label: string,
+  articles: ArticleRow[],
+  options: BundleOptions = {},
 ): Promise<BundleResult[]> {
-  const articles = getUnbundledByPublication(publicationName) as ArticleRow[];
   if (articles.length === 0) return [];
 
   const withImages = options.withImages ?? false;
-  const baseTitle = buildBundleTitle(publicationName, articles);
+  const baseTitle = buildBundleTitle(label, articles);
   const epubBuffer = await buildEpub(baseTitle, articles.map(_toEpubArticle), withImages);
 
   if (epubBuffer.length <= MAX_BUNDLE_SIZE) {
@@ -159,4 +219,19 @@ export async function bundlePublication(
   }
 
   return results;
+}
+
+/**
+ * Bundle all unbundled articles for a publication into one or more EPUBs.
+ *
+ * @param publicationName - The publication to bundle articles for
+ * @param options - Configuration for the bundling process
+ * @returns The list of created bundles (empty if no unbundled articles exist)
+ */
+export async function bundlePublication(
+  publicationName: string,
+  options: BundleOptions = {},
+): Promise<BundleResult[]> {
+  const articles = getUnbundledByPublication(publicationName) as ArticleRow[];
+  return bundleArticles(publicationName, articles, options);
 }

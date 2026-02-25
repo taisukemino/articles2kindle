@@ -1,14 +1,14 @@
 # articles2kindle
 
-CLI tool that fetches articles from Feedly and Substack, bundles them into EPUBs, and sends them to your Kindle via email.
+CLI tool that fetches articles from Feedly, Substack, and X (bookmarks), bundles them into EPUBs, and sends them to your Kindle via email.
 
 ## Workflow
 
 ```
-articles2kindle fetch      # Fetch articles from configured sources
-articles2kindle list       # Browse fetched articles
-articles2kindle bundle     # Create an EPUB from selected articles
-articles2kindle send       # Email the EPUB to your Kindle
+pnpm dev fetch      # Fetch articles from configured sources
+pnpm dev list       # Browse fetched articles
+pnpm dev bundle     # Create an EPUB from selected articles
+pnpm dev send       # Email the EPUB to your Kindle
 ```
 
 ## Setup
@@ -22,28 +22,47 @@ articles2kindle send       # Email the EPUB to your Kindle
 
 ```sh
 pnpm install
-pnpm build
+```
+
+### Key Commands
+
+```sh
+pnpm dev <command>     # Run any CLI command (e.g. pnpm dev fetch, pnpm dev list)
+pnpm build             # Build for production
+pnpm test              # Run tests
+pnpm typecheck         # TypeScript type checking
+pnpm lint              # Lint source files
 ```
 
 ### Configure
 
-Run the interactive setup wizard:
+Copy `.env.example` to `.env` and fill in your values:
 
 ```sh
-articles2kindle config init
+cp .env.example .env
 ```
 
-You will be prompted to configure one or both sources:
+See `.env.example` for all available variables. At minimum you need:
 
-- **Feedly** - access token and stream ID (use `user/<your-user-id>/tag/global.saved` for Saved For Later)
-- **Substack** - publication URLs (e.g., `https://www.techemails.com`)
+- **At least one source**: Feedly (`FEEDLY_ACCESS_TOKEN`, `FEEDLY_STREAM_ID`), Substack (`SUBSTACK_URLS`), or X Bookmarks (see below)
+- **SMTP**: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` (and optionally `SMTP_PORT`, `SMTP_SECURE`)
+- **Kindle**: `KINDLE_EMAIL`, `KINDLE_SENDER_EMAIL` (and optionally `KINDLE_EMAILS` for multiple devices)
 
-Plus shared settings:
+#### X Bookmarks setup
 
-- **SMTP** - host, port, username, password (for sending emails)
-- **Kindle** - your `@kindle.com` email address and an approved sender email
+X Bookmarks requires an X app with API scopes `bookmark.read`, `tweet.read`, and `users.read`.
 
-Configuration is stored as a TOML file at the XDG-compliant config path (e.g., `~/.config/articles2kindle/config.toml` on Linux, `~/Library/Preferences/articles2kindle/config.toml` on macOS).
+1. Create a project and app at the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
+2. Copy the app's **Client Secret ID** (from Keys and tokens) to `X_CLIENT_SECRET_ID` in your `.env` file
+3. Run:
+
+```sh
+pnpm dev x auth
+```
+
+This opens a browser, completes OAuth, and saves `X_ACCESS_TOKEN`, `X_REFRESH_TOKEN`, and `X_USER_ID` in `.env` automatically.
+
+Threads are automatically detected and stitched together when a thread starter is bookmarked.
 
 #### Substack paywalled content
 
@@ -60,12 +79,6 @@ SUBSTACK_CONNECT_SID=s%3Ayour-cookie-value-here
 
 The cookie expires periodically — update it when you see auth errors.
 
-To view your current configuration (with secrets masked):
-
-```sh
-articles2kindle config show
-```
-
 ## Usage
 
 ### Fetch articles
@@ -73,20 +86,27 @@ articles2kindle config show
 Fetch new articles from all configured sources:
 
 ```sh
-articles2kindle fetch
+pnpm dev fetch
 ```
 
 Fetch from a specific source:
 
 ```sh
-articles2kindle fetch --source substack
-articles2kindle fetch --source feedly
+pnpm dev fetch --source feedly
+pnpm dev fetch --source substack
+pnpm dev fetch --source x
 ```
 
 Use `--full` to ignore the last fetch timestamp and re-fetch everything:
 
 ```sh
-articles2kindle fetch --full
+pnpm dev fetch --full
+```
+
+Limit the number of articles fetched (useful for testing):
+
+```sh
+pnpm dev fetch --source x --limit 3
 ```
 
 ### List articles
@@ -94,31 +114,39 @@ articles2kindle fetch --full
 Show unbundled articles:
 
 ```sh
-articles2kindle list
+pnpm dev list
+```
+
+Filter by source:
+
+```sh
+pnpm dev list --source feedly
+pnpm dev list --source substack
+pnpm dev list --source x
 ```
 
 Filter by author:
 
 ```sh
-articles2kindle list --author "John Doe"
+pnpm dev list --author "John Doe"
 ```
 
 Include already-bundled articles:
 
 ```sh
-articles2kindle list --all
+pnpm dev list --all
 ```
 
 List all publications with article counts:
 
 ```sh
-articles2kindle list publications
+pnpm dev list publications
 ```
 
 List all bundles:
 
 ```sh
-articles2kindle list bundles
+pnpm dev list bundles
 ```
 
 ### Bundle into EPUB
@@ -126,19 +154,26 @@ articles2kindle list bundles
 Bundle all unbundled articles by publication:
 
 ```sh
-articles2kindle bundle --publication "Internal Tech Emails"
+pnpm dev bundle --publication "Internal Tech Emails"
+```
+
+Bundle all unbundled articles from a specific source:
+
+```sh
+pnpm dev bundle --source x
+pnpm dev bundle --source substack --title "Substack Digest"
 ```
 
 Set a custom title:
 
 ```sh
-articles2kindle bundle --publication "Internal Tech Emails" --title "Weekend Reading"
+pnpm dev bundle --publication "Internal Tech Emails" --title "Weekend Reading"
 ```
 
 Include images in the EPUB (slower, downloads external images):
 
 ```sh
-articles2kindle bundle --publication "Internal Tech Emails" --with-images
+pnpm dev bundle --publication "Internal Tech Emails" --with-images
 ```
 
 Large bundles are automatically split into parts to stay under Gmail's 25MB SMTP limit.
@@ -148,13 +183,13 @@ Large bundles are automatically split into parts to stay under Gmail's 25MB SMTP
 Send the latest unsent bundle:
 
 ```sh
-articles2kindle send
+pnpm dev send
 ```
 
 Send a specific bundle by ID:
 
 ```sh
-articles2kindle send --bundle 3
+pnpm dev send --bundle 3
 ```
 
 ## Development
@@ -178,7 +213,7 @@ pnpm db:migrate        # Run database migrations
 - **Database**: SQLite via Drizzle ORM + better-sqlite3
 - **EPUB generation**: epub-gen-memory
 - **Email**: Nodemailer (SMTP)
-- **Config**: TOML files (XDG-compliant paths)
+- **Config**: Environment variables via `.env`
 - **Build**: tsup
 - **Test**: vitest
 

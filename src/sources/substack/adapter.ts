@@ -8,11 +8,19 @@ export class SubstackAdapter implements SourceAdapter {
   private readonly client: SubstackApiClient;
   private readonly publications: SubstackConfig['publications'];
 
+  /**
+   * Create a Substack adapter with the given configuration.
+   *
+   * @param config - Substack-specific configuration (list of publications)
+   */
   constructor(config: SubstackConfig) {
     this.client = new SubstackApiClient();
     this.publications = config.publications;
   }
 
+  /**
+   * Validate the Substack connection by fetching the first publication's archive.
+   */
   async validateConnection(): Promise<void> {
     const firstPublication = this.publications[0];
     if (!firstPublication) {
@@ -21,6 +29,12 @@ export class SubstackAdapter implements SourceAdapter {
     await this.client.fetchArchivePage(firstPublication.url, 0);
   }
 
+  /**
+   * Fetch articles from all configured Substack publications, yielding batches.
+   *
+   * @param options - Fetch constraints (count limit, newerThan cutoff)
+   * @returns Async generator yielding batches of mapped source articles
+   */
   async *fetchArticles(options: FetchOptions): AsyncGenerator<SourceArticle[]> {
     let totalFetched = 0;
     const maxCount = options.count ?? Infinity;
@@ -72,6 +86,11 @@ export class SubstackAdapter implements SourceAdapter {
     }
   }
 
+  /**
+   * List configured Substack publications as collections.
+   *
+   * @returns Array of collections derived from configured publications
+   */
   async listCollections(): Promise<Collection[]> {
     return this.publications.map((publication) => ({
       id: publication.url,

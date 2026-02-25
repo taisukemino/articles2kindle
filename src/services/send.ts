@@ -5,6 +5,12 @@ import { bundles } from '../db/schema.js';
 import { markBundleSent, cleanupStaleBundles } from '../db/queries/bundles.js';
 import { sendToKindle } from '../email/sender.js';
 
+/**
+ * Collect all unique Kindle email addresses from the configuration.
+ *
+ * @param config - The application configuration containing Kindle email settings
+ * @returns A deduplicated list of Kindle email addresses
+ */
 export function getAllKindleEmails(config: AppConfig): string[] {
   const allEmails = new Set<string>();
   allEmails.add(config.kindle.email);
@@ -18,6 +24,13 @@ export function getAllKindleEmails(config: AppConfig): string[] {
 
 export { cleanupStaleBundles };
 
+/**
+ * Send a bundle's EPUB file to all configured Kindle email addresses.
+ *
+ * @param bundleId - The database ID of the bundle to send
+ * @param config - The application configuration containing SMTP and Kindle settings
+ * @returns A comma-separated string of recipient email addresses
+ */
 export async function sendBundleToKindle(bundleId: number, config: AppConfig): Promise<string> {
   const database = getDatabase();
   const bundle = database.select().from(bundles).where(eq(bundles.id, bundleId)).get();
