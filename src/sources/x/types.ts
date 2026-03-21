@@ -47,6 +47,17 @@ export interface XReferencedTweet {
   readonly id: string;
 }
 
+export interface XArticle {
+  readonly title: string;
+  readonly plain_text?: string;
+  readonly preview_text?: string;
+  readonly cover_media?: string;
+  readonly media_entities?: readonly string[];
+  readonly entities?: {
+    readonly urls?: readonly { readonly text: string }[];
+  };
+}
+
 export interface XTweet {
   readonly id: string;
   readonly text: string;
@@ -58,6 +69,7 @@ export interface XTweet {
   readonly entities?: XEntities;
   readonly note_tweet?: XNoteTweet;
   readonly attachments?: XAttachments;
+  readonly article?: XArticle;
 }
 
 export interface XUser {

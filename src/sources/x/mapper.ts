@@ -22,15 +22,33 @@ export function mapTweetsToArticle(
     throw new Error('Cannot map an empty tweet array to an article');
   }
   const authorUser = userLookup.get(firstTweet.author_id);
-  const isThread = threadTweets.length > 1;
+  const tweetUrl = authorUser
+    ? `https://x.com/${authorUser.username}/status/${firstTweet.id}`
+    : null;
 
+  // If the tweet contains an X Article, use its content directly
+  const article = threadTweets.find((tweet) => tweet.article)?.article;
+  if (article?.plain_text) {
+    const articleHtml = _articleTextToHtml(article.plain_text);
+    return {
+      sourceId: `x-thread-${firstTweet.conversation_id}`,
+      sourceName: 'x',
+      title: article.title,
+      author: authorUser ? `${authorUser.name} (@${authorUser.username})` : null,
+      contentHtml: articleHtml,
+      excerpt: article.plain_text.slice(0, 500) || null,
+      url: tweetUrl,
+      publicationName: PUBLICATION_NAME,
+      publishedAt: firstTweet.created_at ?? null,
+      tags: _extractHashtags(threadTweets),
+    };
+  }
+
+  const isThread = threadTweets.length > 1;
   const title = _deriveTitle(firstTweet, authorUser, isThread);
   const contentHtml = _buildContentHtml(threadTweets, userLookup, mediaLookup);
   const fullText = threadTweets.map((tweet) => _getFullTweetText(tweet)).join(' ');
   const excerpt = fullText.slice(0, 500) || null;
-  const tweetUrl = authorUser
-    ? `https://x.com/${authorUser.username}/status/${firstTweet.id}`
-    : null;
 
   return {
     sourceId: `x-thread-${firstTweet.conversation_id}`,
@@ -97,6 +115,62 @@ function _deriveTitle(
     return authorUser ? `Post by @${authorUser.username}` : 'Untitled Post';
   }
   return truncatedText;
+}
+
+function _isHeadingLine(line: string, nextLine: string | undefined): boolean {
+  if (!line || line.length > 100) return false;
+  // Japanese section markers: ■, ●, ◆, 【...】
+  if (/^[■●◆▶]/.test(line)) return true;
+  if (/^【.+】$/.test(line)) return true;
+  // Short line followed by a longer paragraph suggests a heading
+  if (nextLine && line.length <= 60 && !line.endsWith('.') && !line.endsWith('。') && nextLine.length > line.length * 2) {
+    return true;
+  }
+  return false;
+}
+
+function _isSubHeadingLine(line: string): boolean {
+  // Numbered items like "1. Title" or "第1章：Title"
+  return /^\d+\.\s/.test(line) || /^第\d+章/.test(line);
+}
+
+function _articleTextToHtml(plainText: string): string {
+  // Split into individual lines first, then group into paragraphs and headings
+  const lines = plainText.split('\n');
+  const htmlBlocks: string[] = [];
+  let paragraphLines: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return;
+    const text = paragraphLines.join('<br />');
+    htmlBlocks.push(`<p>${text}</p>`);
+    paragraphLines = [];
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    const nextNonEmpty = lines.slice(i + 1).find((l) => l.trim())?.trim();
+
+    if (_isHeadingLine(trimmed, nextNonEmpty)) {
+      flushParagraph();
+      htmlBlocks.push(`<h2>${_escapeHtml(trimmed)}</h2>`);
+    } else if (_isSubHeadingLine(trimmed)) {
+      flushParagraph();
+      htmlBlocks.push(`<h3>${_escapeHtml(trimmed)}</h3>`);
+    } else {
+      paragraphLines.push(_escapeHtml(trimmed));
+    }
+  }
+
+  flushParagraph();
+  return htmlBlocks.join('\n');
 }
 
 function _buildContentHtml(
