@@ -14,15 +14,15 @@ export function createXCommand(): Command {
     .command('auth')
     .description('Authenticate with X via OAuth 2.0 (opens browser)')
     .action(async () => {
-      const clientId = process.env['X_CLIENT_SECRET_ID'];
+      const clientId = process.env['X_CLIENT_ID'];
       if (!clientId) {
         printError(
-          'X_CLIENT_SECRET_ID is not set. Add your "Client Secret ID" from the X Developer Portal to your .env file.',
+          'X_CLIENT_ID is not set. Add your Client ID from the X Developer Portal to your .env file.',
         );
         printInfo('  1. Go to https://developer.x.com/en/portal/dashboard');
         printInfo('  2. Select your app → Keys and tokens');
         printInfo(
-          '  3. Copy "Client Secret ID" and add to .env: X_CLIENT_SECRET_ID=your-client-secret-id',
+          '  3. Copy "Client Secret ID" and add to .env: X_CLIENT_ID=your-client-secret-id',
         );
         process.exitCode = 1;
         return;

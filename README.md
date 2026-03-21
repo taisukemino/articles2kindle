@@ -53,7 +53,7 @@ See `.env.example` for all available variables. At minimum you need:
 X Bookmarks requires an X app with API scopes `bookmark.read`, `tweet.read`, and `users.read`.
 
 1. Create a project and app at the [X Developer Portal](https://developer.x.com/en/portal/dashboard)
-2. Copy the app's **Client Secret ID** (from Keys and tokens) to `X_CLIENT_SECRET_ID` in your `.env` file
+2. Copy the app's **Client ID** (from Keys and tokens) to `X_CLIENT_ID` in your `.env` file
 3. Run:
 
 ```sh

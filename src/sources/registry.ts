@@ -29,7 +29,7 @@ export function getAdapter(name: string, config: AppConfig): SourceAdapter {
     case 'x':
       if (!hasValidXEnv()) {
         throw new Error(
-          'X is not configured. Set X_CLIENT_SECRET_ID in your .env file and run "articles2kindle x auth".',
+          'X is not configured. Set X_CLIENT_ID in your .env file and run "articles2kindle x auth".',
         );
       }
       return new XAdapter();

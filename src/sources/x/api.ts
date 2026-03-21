@@ -6,8 +6,8 @@ const BOOKMARKS_PAGE_SIZE = 100;
 const DELAY_BETWEEN_REQUESTS_MS = 200;
 
 const TWEET_FIELDS =
-  'conversation_id,author_id,created_at,referenced_tweets,in_reply_to_user_id,note_tweet,entities,attachments';
-const EXPANSIONS = 'author_id,attachments.media_keys';
+  'conversation_id,author_id,created_at,referenced_tweets,in_reply_to_user_id,note_tweet,entities,attachments,article';
+const EXPANSIONS = 'author_id,attachments.media_keys,article.cover_media,article.media_entities';
 const USER_FIELDS = 'name,username';
 const MEDIA_FIELDS = 'media_key,type,url,preview_image_url,alt_text';
 
@@ -141,7 +141,7 @@ export class XApiClient {
 
   private async _tryRefreshToken(): Promise<boolean> {
     this.hasAttemptedRefresh = true;
-    const clientId = process.env['X_CLIENT_SECRET_ID'];
+    const clientId = process.env['X_CLIENT_ID'];
     const refreshToken = process.env['X_REFRESH_TOKEN'];
 
     if (!clientId || !refreshToken) {
