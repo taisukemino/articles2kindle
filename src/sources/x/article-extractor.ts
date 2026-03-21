@@ -17,18 +17,35 @@ export function isLinkOnlyTweet(tweets: readonly XTweet[]): boolean {
 }
 
 /**
- * Extract the first expanded URL from tweet entities.
+ * Check whether a URL points to X/Twitter itself (which Jina Reader cannot fetch).
+ *
+ * @param url - The URL to check
+ * @returns True if the URL is an X/Twitter link
+ */
+function _isXUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return hostname === 'x.com' || hostname === 'twitter.com';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract the first expanded URL from tweet entities that points to an external site.
+ * Skips x.com/twitter.com URLs since Jina Reader cannot fetch authenticated X content.
  *
  * @param tweets - Tweets to extract URLs from
- * @returns The first expanded URL found, or null
+ * @returns The first non-X expanded URL found, or null
  */
 export function extractFirstArticleUrl(tweets: readonly XTweet[]): string | null {
   for (const tweet of tweets) {
     const entities = tweet.note_tweet?.entities ?? tweet.entities;
-    if (entities?.urls && entities.urls.length > 0) {
-      const firstUrl = entities.urls[0];
-      if (firstUrl) {
-        return firstUrl.expanded_url;
+    if (entities?.urls) {
+      for (const urlEntity of entities.urls) {
+        if (urlEntity.expanded_url && !_isXUrl(urlEntity.expanded_url)) {
+          return urlEntity.expanded_url;
+        }
       }
     }
   }
