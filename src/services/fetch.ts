@@ -6,6 +6,7 @@ import {
   normalizeAuthor,
   countWordsInHtml,
   getSourceIds,
+  removeUnbookmarkedArticles,
 } from '../db/queries/articles.js';
 import { getDatabase } from '../db/connection.js';
 import { syncLog } from '../db/schema.js';
@@ -29,6 +30,7 @@ function _getLastFetchTimestamp(sourceName: string): number | undefined {
 export interface FetchResult {
   readonly fetchedCount: number;
   readonly newArticleCount: number;
+  readonly removedCount: number;
 }
 
 export interface FetchProgress {
@@ -74,10 +76,12 @@ export async function fetchFromSource(
 
   try {
     const adapter = getAdapter(sourceName, config);
+    const isFullXFetch = sourceName === 'x' && options.full;
     const knownSourceIds =
       sourceName === 'x' && !options.full ? getSourceIds(sourceName) : undefined;
     let fetchedCount = 0;
     let newArticleCount = 0;
+    const seenSourceIds = new Set<string>();
 
     for await (const batch of adapter.fetchArticles({
       newerThan,
@@ -85,6 +89,7 @@ export async function fetchFromSource(
       count: options.limit,
     })) {
       for (const article of batch) {
+        seenSourceIds.add(article.sourceId);
         const isNew = upsertArticle({
           ...article,
           authorNormalized: normalizeAuthor(article.author),
@@ -95,6 +100,12 @@ export async function fetchFromSource(
         if (isNew) newArticleCount++;
       }
       options.onProgress?.({ fetchedCount, newArticleCount });
+    }
+
+    // Remove articles that were unbookmarked on X (only during full fetch)
+    let removedCount = 0;
+    if (isFullXFetch && seenSourceIds.size > 0) {
+      removedCount = removeUnbookmarkedArticles(sourceName, seenSourceIds);
     }
 
     database
@@ -108,7 +119,7 @@ export async function fetchFromSource(
       .where(eq(syncLog.id, logEntry.id))
       .run();
 
-    return { fetchedCount, newArticleCount };
+    return { fetchedCount, newArticleCount, removedCount };
   } catch (error) {
     database
       .update(syncLog)

@@ -74,4 +74,11 @@ function runMigrations(sqlite: Database.Database): void {
       status TEXT NOT NULL DEFAULT 'running'
     );
   `);
+
+  // Add bookmark_index column for X bookmark ordering
+  try {
+    sqlite.exec('ALTER TABLE articles ADD COLUMN bookmark_index INTEGER');
+  } catch {
+    // Column already exists
+  }
 }

@@ -47,6 +47,8 @@ export class XAdapter implements SourceAdapter {
     const bookmarksPageSize = maxCount < 100 ? Math.max(maxCount, 10) : undefined;
     let paginationToken: string | undefined;
     const seenConversationIds = new Set<string>();
+    const conversationBookmarkIndex = new Map<string, number>();
+    let bookmarkPosition = 0;
     do {
       const response = await this.client.fetchBookmarksPage(paginationToken, bookmarksPageSize);
 
@@ -55,6 +57,9 @@ export class XAdapter implements SourceAdapter {
       for (const tweet of response.data) {
         allBookmarkedTweets.push(tweet);
         seenConversationIds.add(tweet.conversation_id);
+        if (!conversationBookmarkIndex.has(tweet.conversation_id)) {
+          conversationBookmarkIndex.set(tweet.conversation_id, bookmarkPosition++);
+        }
       }
 
       const pageUsers = buildUserLookup(response.includes?.users);
@@ -97,6 +102,20 @@ export class XAdapter implements SourceAdapter {
 
       const firstTweet = bookmarkedTweets[0];
       if (!firstTweet) continue;
+
+      const bmIndex = conversationBookmarkIndex.get(conversationId);
+
+      // If the tweet contains an X Article, use it directly — skip thread expansion
+      const articleTweet = bookmarkedTweets.find((tweet) => tweet.article?.plain_text);
+      if (articleTweet) {
+        const mapped = mapTweetsToArticle([articleTweet], allUsers, allMedia);
+        articles.push({ ...mapped, bookmarkIndex: bmIndex });
+        totalYielded++;
+        if (articles.length >= BATCH_YIELD_SIZE) {
+          yield articles.splice(0);
+        }
+        continue;
+      }
 
       const isThreadStarter = firstTweet.conversation_id === firstTweet.id;
       const authorUser = allUsers.get(firstTweet.author_id);
@@ -147,7 +166,7 @@ export class XAdapter implements SourceAdapter {
         }
       }
 
-      articles.push(article);
+      articles.push({ ...article, bookmarkIndex: bmIndex });
       totalYielded++;
 
       if (articles.length >= BATCH_YIELD_SIZE) {

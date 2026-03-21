@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   getUnbundledByPublication,
   getUnbundledBySource,
+  getAllBySource,
   markArticlesBundled,
 } from '../db/queries/articles.js';
 import { listPublications } from '../db/queries/publications.js';
@@ -133,7 +134,11 @@ export function selectArticlesByPublication(
 export function selectArticlesBySource(
   sourceName: string,
 ): { label: string; articles: ArticleRow[] } | null {
-  const articles = getUnbundledBySource(sourceName) as ArticleRow[];
+  // X bundles all current bookmarks (snapshot), other sources bundle only new articles
+  const articles =
+    sourceName === 'x'
+      ? (getAllBySource(sourceName) as ArticleRow[])
+      : (getUnbundledBySource(sourceName) as ArticleRow[]);
   if (articles.length === 0) return null;
 
   const SOURCE_LABELS: Record<string, string> = {

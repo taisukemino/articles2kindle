@@ -9,6 +9,7 @@ export interface SourceArticle {
   readonly publicationName: string | null;
   readonly publishedAt: string | null;
   readonly tags: readonly string[];
+  readonly bookmarkIndex?: number;
 }
 
 export interface FetchOptions {

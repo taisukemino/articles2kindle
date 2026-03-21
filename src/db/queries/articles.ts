@@ -1,4 +1,4 @@
-import { eq, and, like, desc } from 'drizzle-orm';
+import { eq, and, like, desc, asc, sql } from 'drizzle-orm';
 import { getDatabase } from '../connection.js';
 import { articles } from '../schema.js';
 
@@ -42,10 +42,12 @@ export interface InsertArticle {
   readonly fetchedAt: string;
   readonly wordCount: number | null;
   readonly tags: readonly string[] | null;
+  readonly bookmarkIndex?: number;
 }
 
 /**
  * Inserts an article if it does not already exist for the given source name and source ID.
+ * If the article exists and bookmarkIndex is provided, updates the bookmark index.
  *
  * @param article - The article data to insert
  * @returns True if a new article was inserted, false if it already existed
@@ -61,6 +63,13 @@ export function upsertArticle(article: InsertArticle): boolean {
     .get();
 
   if (existing) {
+    if (article.bookmarkIndex !== undefined) {
+      database
+        .update(articles)
+        .set({ bookmarkIndex: article.bookmarkIndex })
+        .where(eq(articles.id, existing.id))
+        .run();
+    }
     return false;
   }
 
@@ -181,6 +190,22 @@ export function getUnbundledBySource(sourceName: string) {
 }
 
 /**
+ * Retrieves all articles for a given source, ordered by published date descending.
+ *
+ * @param sourceName - The source name to filter by (e.g. "x")
+ * @returns An array of all article records for the source
+ */
+export function getAllBySource(sourceName: string) {
+  const database = getDatabase();
+  return database
+    .select()
+    .from(articles)
+    .where(and(eq(articles.sourceName, sourceName), sql`${articles.bookmarkIndex} IS NOT NULL`))
+    .orderBy(asc(articles.bookmarkIndex))
+    .all();
+}
+
+/**
  * Marks the given articles as bundled and records the current timestamp.
  *
  * @param articleIds - The database IDs of articles to mark as bundled
@@ -195,4 +220,37 @@ export function markArticlesBundled(articleIds: number[]): void {
       .where(eq(articles.id, articleId))
       .run();
   }
+}
+
+/**
+ * Remove unbundled articles from a source whose source IDs are no longer present
+ * in the current set of bookmarks. Already-bundled articles are kept since they
+ * were already sent to Kindle.
+ *
+ * @param sourceName - The source name (e.g. "x")
+ * @param currentSourceIds - The set of source IDs that still exist in the source
+ * @returns The number of articles removed
+ */
+export function removeUnbookmarkedArticles(
+  sourceName: string,
+  currentSourceIds: ReadonlySet<string>,
+): number {
+  const database = getDatabase();
+  const allStored = database
+    .select({ id: articles.id, sourceId: articles.sourceId, bundled: articles.bundled })
+    .from(articles)
+    .where(eq(articles.sourceName, sourceName))
+    .all();
+
+  const idsToDelete = allStored
+    .filter((row) => !row.bundled && !currentSourceIds.has(row.sourceId))
+    .map((row) => row.id);
+
+  if (idsToDelete.length === 0) return 0;
+
+  for (const id of idsToDelete) {
+    database.delete(articles).where(eq(articles.id, id)).run();
+  }
+
+  return idsToDelete.length;
 }

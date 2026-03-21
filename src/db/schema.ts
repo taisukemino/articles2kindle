@@ -19,6 +19,7 @@ export const articles = sqliteTable(
     tags: text('tags', { mode: 'json' }).$type<string[]>(),
     bundled: integer('bundled', { mode: 'boolean' }).default(false),
     lastBundledAt: text('last_bundled_at'),
+    bookmarkIndex: integer('bookmark_index'),
   },
   (table) => [
     uniqueIndex('source_unique_idx').on(table.sourceName, table.sourceId),

@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import ora from 'ora';
 import { loadConfig } from '../../config/manager.js';
-import { isValidConfig } from '../../config/schema.js';
 import { fetchFromSource, getSourceNames } from '../../services/fetch.js';
 import { printSuccess, printError } from '../output.js';
 
@@ -18,13 +17,6 @@ export function createFetchCommand(): Command {
     .option('--limit <number>', 'Maximum number of articles to fetch', parseInt)
     .action(async (options: { source?: string; full?: boolean; limit?: number }) => {
       const config = loadConfig();
-      if (!isValidConfig(config)) {
-        printError(
-          'Invalid configuration. Check your .env file — see .env.example for required variables.',
-        );
-        process.exit(1);
-      }
-
       const sourceNames = getSourceNames(config, options.source);
 
       if (sourceNames.length === 0) {
@@ -47,8 +39,10 @@ export function createFetchCommand(): Command {
           });
 
           spinner.stop();
+          const removedSuffix =
+            result.removedCount > 0 ? `, ${result.removedCount} unbookmarked removed` : '';
           printSuccess(
-            `[${sourceName}] Fetch complete: ${result.fetchedCount} fetched, ${result.newArticleCount} new articles`,
+            `[${sourceName}] Fetch complete: ${result.fetchedCount} fetched, ${result.newArticleCount} new articles${removedSuffix}`,
           );
         } catch (error) {
           spinner.stop();
